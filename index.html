@@ -1,220 +1,422 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#f6f7fb">
-<title>Taskflow — Tasks & Time</title>
-<link rel="stylesheet" href="styles.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f7fb">
+
+    <title>Taskflow — Tasks &amp; Time</title>
+
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="mobile-head">
-<div class="brand">
-<span class="brand-mark">✓</span>
-<span>Taskflow</span>
-</div>
-<div class="mobile-nav" id="mobileNav">
-</div>
-</div>
-<div class="app">
-<aside class="sidebar">
-<div class="brand">
-<span class="brand-mark">✓</span>
-<span>Taskflow</span>
-</div>
-<div class="nav-label">WORKSPACE</div>
-<nav class="nav" id="sideNav">
-</nav>
-<div class="side-bottom">
-<strong>Taskflow</strong>
-<br>Make today count. Make time work for you.</div>
-</aside>
-<main class="main">
-<div class="topline">
-<div class="crumb" id="crumb">WORKSPACE / Home</div>
-<div class="date-chip" id="today">
-</div>
-</div>
-<section class="page active" id="home">
-<div class="hero">
-<div>
-<h1 id="greeting">One step at a time.</h1>
-<p>Organize your tasks and focus on the time in front of you.<br>Manage tasks and reminders from one place.</p>
-<div style="margin-top:20px">
-<button class="primary" onclick="go('tasks')">＋ Add a task</button>
-</div>
-</div>
-<div class="hero-icon">✦</div>
-</div>
-<div class="stats">
-<div class="stat">
-<label>Open tasks</label>
-<strong id="statOpen">0<span class="unit">tasks</span>
-</strong>
-</div>
-<div class="stat">
-<label>Due today</label>
-<strong id="statToday">0<span class="unit">tasks</span>
-</strong>
-</div>
-<div class="stat">
-<label>Timer</label>
-<strong id="statTimer">Stopped<span class="unit">◷</span>
-</strong>
-</div>
-</div>
-<div class="section-title row">
-<h2>Quick access</h2>
-<span>Jump to a section</span>
-</div>
-<div class="quick-grid">
-<button class="quick" onclick="go('deadlines')">
-<span class="qico">▣</span>
-<strong>View deadlines</strong>
-<small>Review tasks as cards or a list</small>
-</button>
-<button class="quick" onclick="go('timer')">
-<span class="qico">◷</span>
-<strong>Start timer</strong>
-<small>Set focus time and alerts</small>
-</button>
-<button class="quick" onclick="go('reminders')">
-<span class="qico">◉</span>
-<strong>Reminder schedule</strong>
-<small>Set multiple reminders</small>
-</button>
-</div>
-<div class="section-title row">
-<h2>Upcoming deadlines</h2>
-<button class="icon-btn" onclick="go('deadlines')">View all → →</button>
-</div>
-<div id="homeTasks" class="task-list">
-</div>
-</section>
-<section class="page" id="deadlines">
-<h1>Task deadlines</h1>
-<p class="sub">Tasks are sorted by deadline. Cards rotate automatically.</p>
-<div class="toolbar">
-<select class="filter" id="deadlineFilter" onchange="renderDeadlines()">
-<option value="open">Open tasks</option>
-<option value="all">All tasks</option>
-</select>
-<span class="badge blue" id="deadlineCount">0 tasks</span>
-</div>
-<div id="deadlineContent">
-</div>
-<div class="carousel-dots" id="carouselDots">
-</div>
-</section>
-<section class="page" id="timer">
-<h1>Focus timer</h1>
-<p class="sub">Stay focused and get notified at the times you choose.</p>
-<div class="timer-box">
-<div class="timer-ring" id="timerRing">
-<div class="clock" id="timerClock">00:00</div>
-<div class="timer-caption" id="timerCaption">Timer stopped</div>
-</div>
-<div class="timer-controls" id="timerControls">
-</div>
-<div class="timer-meta" id="timerMeta">
-</div>
-<div class="hint">The timer continues when you switch pages. If you close the browser, elapsed time is recalculated when you return.</div>
-</div>
-<div class="section-title row">
-<h2>Upcoming reminders</h2>
-<button class="icon-btn" onclick="go('reminders')">Edit settings → →</button>
-</div>
-<div id="timerMilestones" class="milestone-list">
-</div>
-</section>
-<section class="page" id="tasks">
-<h1>Task settings</h1>
-<p class="sub">Manage task details, deadlines, and display options.</p>
-<div class="panel" style="margin-bottom:19px">
-<div class="row" style="margin-bottom:18px">
-<h2 id="taskFormTitle">New task</h2>
-<span class="badge">Task list</span>
-</div>
-<form id="taskForm">
-<input type="hidden" id="taskId">
-<div class="form-grid">
-<div class="field">
-<label for="taskName">Task name</label>
-<input id="taskName" maxlength="100" placeholder="e.g. Finish the project proposal" required>
-</div>
-<div class="field">
-<label for="taskDue">Deadline</label>
-<input id="taskDue" type="datetime-local">
-</div>
-<div class="field full">
-<label for="taskMemo">Notes</label>
-<textarea id="taskMemo" maxlength="500" placeholder="Add a note or reminder">
-</textarea>
-</div>
-<div class="field">
-<label for="taskMode">Display style on the deadlines page</label>
-<select id="taskMode">
-<option value="card">Card view (rotates automatically)</option>
-<option value="list">List view</option>
-</select>
-</div>
-</div>
-<div class="form-actions">
-<button type="button" class="secondary" id="cancelEdit" onclick="resetTaskForm()" style="display:none">Cancel</button>
-<button type="submit" class="primary">Save task</button>
-</div>
-</form>
-</div>
-<div class="section-title row">
-<h2>Saved tasks</h2>
-<span id="taskCount">0 tasks</span>
-</div>
-<div id="taskSettingsList" class="task-list">
-</div>
-</section>
-<section class="page" id="reminders">
-<h1>Reminder settings</h1>
-<p class="sub">Set multiple reminders to trigger after starting the timer.</p>
-<div class="panel">
-<div class="settings-note">For example, set 5, 10, and 30 minutes to receive alerts at each interval. Reminders become active when you start the timer.</div>
-<div class="row">
-<h2>Reminder intervals</h2>
-<span class="badge blue" id="milestoneCount">0 tasks</span>
-</div>
-<div id="settingsMilestones" class="milestone-list" style="margin-top:16px">
-</div>
-<div class="time-add">
-<div class="field">
-<label for="milestoneMinutes">Minutes after starting</label>
-<input id="milestoneMinutes" type="number" min="1" max="1440" value="5">
-</div>
-<button class="primary" onclick="addMilestone()">＋ Add</button>
-</div>
-<div class="form-actions" style="justify-content:flex-start">
-<button class="secondary" onclick="addPreset()">Set 5, 10, and 30 min</button>
-<button class="secondary" onclick="resetMilestones()">Restore defaults</button>
-</div>
-</div>
-<div class="section-title">
-<h2>About notifications</h2>
-</div>
-<div class="panel" style="font-size:12px;line-height:1.9;color:#7b8495">Alerts appear over this page and are read aloud using your browser’s speech synthesis. The available voice depends on your browser and operating system. Interact with the timer once to enable audio.</div>
-</section>
-</main>
-</div>
-<div class="overlay" id="interrupt">
-<div class="alert-box">
-<div class="alert-symbol">🔔</div>
-<span class="badge blue" id="alertTime">Reminder</span>
-<h2 id="alertTitle" style="margin-top:12px">Time for a short break</h2>
-<p id="alertMessage">
-</p>
-<button class="primary" onclick="dismissAlert()">Got it</button>
-</div>
-</div>
-<div class="toast" id="toast">
-</div>
-<script src="app.js" defer></script>
+    <div class="mobile-head">
+        <div class="brand">
+            <span class="brand-mark">✓</span>
+            <span>Taskflow</span>
+        </div>
+
+        <div class="mobile-nav" id="mobileNav">
+        </div>
+    </div>
+
+    <div class="app">
+        <aside class="sidebar">
+            <div class="brand">
+                <span class="brand-mark">✓</span>
+                <span>Taskflow</span>
+            </div>
+
+            <div class="nav-label">WORKSPACE</div>
+
+            <nav class="nav" id="sideNav">
+            </nav>
+
+            <div class="side-bottom">
+                <strong>Taskflow</strong>
+                <br>
+                Make today count. Make time work for you.
+            </div>
+        </aside>
+
+        <main class="main">
+            <div class="topline">
+                <div class="crumb" id="crumb">WORKSPACE / Home</div>
+                <div class="date-chip" id="today">
+                </div>
+            </div>
+
+            <!-- Home -->
+            <section class="page active" id="home">
+                <div class="hero">
+                    <div>
+                        <h1 id="greeting">One step at a time.</h1>
+
+                        <p>
+                            Organize your tasks and focus on the time in front of you.<br>
+                            Manage tasks and reminders from one place.
+                        </p>
+
+                        <div style="margin-top: 20px">
+                            <button class="primary" onclick="go('tasks')">
+                                ＋ Add a task
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="hero-icon">✦</div>
+                </div>
+
+                <div class="stats">
+                    <div class="stat">
+                        <label>Open tasks</label>
+                        <strong id="statOpen">
+                            0<span class="unit">tasks</span>
+                        </strong>
+                    </div>
+
+                    <div class="stat">
+                        <label>Due today</label>
+                        <strong id="statToday">
+                            0<span class="unit">tasks</span>
+                        </strong>
+                    </div>
+
+                    <div class="stat">
+                        <label>Timer</label>
+                        <strong id="statTimer">
+                            Stopped<span class="unit">◷</span>
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="section-title row">
+                    <h2>Quick access</h2>
+                    <span>Jump to a section</span>
+                </div>
+
+                <div class="quick-grid">
+                    <button class="quick" onclick="go('deadlines')">
+                        <span class="qico">▣</span>
+                        <strong>View deadlines</strong>
+                        <small>Review tasks as cards or a list</small>
+                    </button>
+
+                    <button class="quick" onclick="go('timer')">
+                        <span class="qico">◷</span>
+                        <strong>Start timer</strong>
+                        <small>Set focus time and alerts</small>
+                    </button>
+
+                    <button class="quick" onclick="go('reminders')">
+                        <span class="qico">◉</span>
+                        <strong>Reminder schedule</strong>
+                        <small>Set multiple reminders</small>
+                    </button>
+                </div>
+
+                <div class="section-title row">
+                    <h2>Upcoming deadlines</h2>
+                    <button class="icon-btn" onclick="go('deadlines')">
+                        View all → →
+                    </button>
+                </div>
+
+                <div id="homeTasks" class="task-list">
+                </div>
+            </section>
+
+            <!-- Deadlines -->
+            <section class="page" id="deadlines">
+                <h1>Task deadlines</h1>
+                <p class="sub">
+                    Tasks are sorted by deadline. Cards rotate automatically.
+                </p>
+
+                <div class="toolbar">
+                    <select
+                        class="filter"
+                        id="deadlineFilter"
+                        onchange="renderDeadlines()"
+                    >
+                        <option value="open">Open tasks</option>
+                        <option value="all">All tasks</option>
+                    </select>
+
+                    <span class="badge blue" id="deadlineCount">
+                        0 tasks
+                    </span>
+                </div>
+
+                <div id="deadlineContent">
+                </div>
+
+                <div class="carousel-dots" id="carouselDots">
+                </div>
+            </section>
+
+            <!-- Focus Timer -->
+            <section class="page" id="timer">
+                <h1>Focus timer</h1>
+                <p class="sub">
+                    Stay focused and get notified at the times you choose.
+                </p>
+
+                <div class="timer-box">
+                    <div class="timer-ring" id="timerRing">
+                        <div class="clock" id="timerClock">00:00</div>
+                        <div class="timer-caption" id="timerCaption">
+                            Timer stopped
+                        </div>
+                    </div>
+
+                    <div class="timer-controls" id="timerControls">
+                    </div>
+
+                    <div class="metronome-panel" id="metronomePanel">
+                        <div class="metronome-head">
+                            <div>
+                                <h2>Metronome</h2>
+                                <p>Play a steady beat while the timer is running.</p>
+                            </div>
+                            <button
+                                class="metronome-toggle"
+                                id="metronomeToggle"
+                                type="button"
+                                aria-pressed="false"
+                                onclick="toggleMetronome()"
+                            >
+                                Metronome off
+                            </button>
+                        </div>
+
+                        <label class="tempo-control" for="metronomeTempo">
+                            <span>Tempo</span>
+                            <input
+                                id="metronomeTempo"
+                                type="range"
+                                min="30"
+                                max="240"
+                                step="1"
+                                value="80"
+                                oninput="updateMetronomeTempo(this.value)"
+                            >
+                            <output id="metronomeTempoValue" for="metronomeTempo">
+                                80 BPM
+                            </output>
+                        </label>
+                    </div>
+
+                    <div class="timer-meta" id="timerMeta">
+                    </div>
+
+                    <div class="hint">
+                        The timer continues when you switch pages.
+                        If you close the browser, elapsed time is recalculated
+                        when you return.
+                    </div>
+                </div>
+
+                <div class="section-title row">
+                    <h2>Upcoming reminders</h2>
+                    <button class="icon-btn" onclick="go('reminders')">
+                        Edit settings → →
+                    </button>
+                </div>
+
+                <div id="timerMilestones" class="milestone-list">
+                </div>
+            </section>
+
+            <!-- Task Settings -->
+            <section class="page" id="tasks">
+                <h1>Task settings</h1>
+                <p class="sub">
+                    Manage task details, deadlines, and display options.
+                </p>
+
+                <div class="panel" style="margin-bottom: 19px">
+                    <div class="row" style="margin-bottom: 18px">
+                        <h2 id="taskFormTitle">New task</h2>
+                        <span class="badge">Task list</span>
+                    </div>
+
+                    <form id="taskForm">
+                        <input type="hidden" id="taskId">
+
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="taskName">Task name</label>
+                                <input
+                                    id="taskName"
+                                    maxlength="100"
+                                    placeholder="e.g. Finish the project proposal"
+                                    required
+                                >
+                            </div>
+
+                            <div class="field">
+                                <label for="taskDue">Deadline</label>
+                                <input
+                                    id="taskDue"
+                                    type="datetime-local"
+                                >
+                            </div>
+
+                            <div class="field full">
+                                <label for="taskMemo">Notes</label>
+                                <textarea
+                                    id="taskMemo"
+                                    maxlength="500"
+                                    placeholder="Add a note or reminder"
+                                ></textarea>
+                            </div>
+
+                            <div class="field">
+                                <label for="taskMode">
+                                    Display style on the deadlines page
+                                </label>
+
+                                <select id="taskMode">
+                                    <option value="card">
+                                        Card view (rotates automatically)
+                                    </option>
+                                    <option value="list">List view</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button
+                                type="button"
+                                class="secondary"
+                                id="cancelEdit"
+                                onclick="resetTaskForm()"
+                                style="display: none"
+                            >
+                                Cancel
+                            </button>
+
+                            <button type="submit" class="primary">
+                                Save task
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="section-title row">
+                    <h2>Saved tasks</h2>
+                    <span id="taskCount">0 tasks</span>
+                </div>
+
+                <div id="taskSettingsList" class="task-list">
+                </div>
+            </section>
+
+            <!-- Reminder Settings -->
+            <section class="page" id="reminders">
+                <h1>Reminder settings</h1>
+                <p class="sub">
+                    Set multiple reminders to trigger after starting the timer.
+                </p>
+
+                <div class="panel">
+                    <div class="settings-note">
+                        For example, set 5, 10, and 30 minutes to receive
+                        alerts at each interval. Reminders become active
+                        when you start the timer.
+                    </div>
+
+                    <div class="row">
+                        <h2>Reminder intervals</h2>
+                        <span class="badge blue" id="milestoneCount">
+                            0 tasks
+                        </span>
+                    </div>
+
+                    <div
+                        id="settingsMilestones"
+                        class="milestone-list"
+                        style="margin-top: 16px"
+                    >
+                    </div>
+
+                    <div class="time-add">
+                        <div class="field">
+                            <label for="milestoneMinutes">
+                                Minutes after starting
+                            </label>
+                            <input
+                                id="milestoneMinutes"
+                                type="number"
+                                min="1"
+                                max="1440"
+                                value="5"
+                            >
+                        </div>
+
+                        <button class="primary" onclick="addMilestone()">
+                            ＋ Add
+                        </button>
+                    </div>
+
+                    <div
+                        class="form-actions"
+                        style="justify-content: flex-start"
+                    >
+                        <button class="secondary" onclick="addPreset()">
+                            Set 5, 10, and 30 min
+                        </button>
+
+                        <button
+                            class="secondary"
+                            onclick="resetMilestones()"
+                        >
+                            Restore defaults
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section-title">
+                    <h2>About notifications</h2>
+                </div>
+
+                <div
+                    class="panel"
+                    style="font-size: 12px; line-height: 1.9; color: #7b8495"
+                >
+                    Alerts appear over this page and are read aloud using
+                    your browser’s speech synthesis. The available voice
+                    depends on your browser and operating system.
+                    Interact with the timer once to enable audio.
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Reminder Alert -->
+    <div class="overlay" id="interrupt">
+        <div class="alert-box">
+            <div class="alert-symbol">🔔</div>
+
+            <span class="badge blue" id="alertTime">Reminder</span>
+
+            <h2 id="alertTitle" style="margin-top: 12px">
+                Time for a short break
+            </h2>
+
+            <p id="alertMessage">
+            </p>
+
+            <button class="primary" onclick="dismissAlert()">
+                Got it
+            </button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+    </div>
+
+    <script src="app.js" defer></script>
 </body>
 </html>
-

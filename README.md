@@ -8,6 +8,7 @@ Taskflow is a lightweight, browser-based task manager and focus timer. It runs a
 - **Task deadlines** displayed as individual cards or a task list. Card-view tasks rotate automatically, and each card shows a live countdown to its deadline.
 - **Task management** to add, edit, complete, and delete tasks, with an optional note, deadline, and per-task display style.
 - **Focus timer** that continues while you move between pages. Its start time and fired reminders are saved so elapsed time can be recalculated when you return to the site.
+- **Metronome** that plays while the focus timer runs. Turn it on or off from the Focus timer screen and adjust the tempo from 30 to 240 BPM.
 - **Multiple timer reminders** scheduled by elapsed minutes, with an on-page alert and browser speech synthesis.
 - **Responsive layout** for desktop and mobile screens.
 
@@ -34,4 +35,5 @@ The `index.html`, `app.js`, and `styles.css` files must stay together in the pub
 - Timer elapsed time can be recalculated after returning to the page, but a browser tab cannot guarantee an exact alert while the browser is fully closed or suspended by the operating system.
 - Voice alerts use the browser's speech-synthesis API and the voices installed on the device. The selected voice can vary by browser and operating system.
 - Audio playback may require interacting with the page first, depending on browser autoplay rules.
+- The metronome uses the Web Audio API and plays only while the timer is running and the metronome is enabled. Its on/off state and tempo are saved in local storage.
 - Task and timer data stays in that browser's local storage; it is not synced to a server.
