@@ -353,6 +353,21 @@ h2 {
   border-radius:14px;
   padding:14px 16px
 }
+.task-row.priority-low {
+  border-left:4px solid #75a8d8;
+  background:linear-gradient(90deg,#f3f8fd,#fff 34%)
+}
+.task-row.priority-normal {
+  border-left:4px solid #98a1b2
+}
+.task-row.priority-high {
+  border-left:4px solid #e2a348;
+  background:linear-gradient(90deg,#fff9ed,#fff 34%)
+}
+.task-row.priority-urgent {
+  border-left:4px solid #dc5b62;
+  background:linear-gradient(90deg,#fff1f1,#fff 34%)
+}
 .check {
   width:19px;
   height:19px;
@@ -387,6 +402,73 @@ h2 {
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap
+}
+.field-hint {
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+  font-size:11px
+}
+.task-tags {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:7px
+}
+.tag-chip {
+  display:inline-flex;
+  border-radius:999px;
+  padding:4px 8px;
+  background:#eef1ff;
+  color:#5f70cb;
+  font-size:10px;
+  font-weight:650
+}
+.priority-badge {
+  border-radius:999px;
+  padding:5px 9px;
+  background:#edf0f5;
+  color:#596276;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap
+}
+.priority-low .priority-badge {
+  background:#e7f2fc;
+  color:#3975a8
+}
+.priority-high .priority-badge {
+  background:#fff0d8;
+  color:#a86a0c
+}
+.priority-urgent .priority-badge {
+  background:#ffe4e5;
+  color:#bc3b48
+}
+.subtask-list {
+  display:grid;
+  gap:5px;
+  margin-top:9px
+}
+.subtask-item {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#596276;
+  font-size:11px
+}
+.subtask-item input {
+  accent-color:var(--green)
+}
+.subtask-item.done span {
+  color:#9aa1ae;
+  text-decoration:line-through
+}
+.task-copy .subtask-progress {
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+  font-size:10px
 }
 .due {
   font-size:11px;
@@ -452,6 +534,18 @@ h2 {
   box-shadow:0 22px 50px #4f62b51a;
   animation:slidein .55s ease;
   position:relative
+}
+.deadline-card.priority-low {
+  border-top:5px solid #75a8d8
+}
+.deadline-card.priority-normal {
+  border-top:5px solid #98a1b2
+}
+.deadline-card.priority-high {
+  border-top:5px solid #e2a348
+}
+.deadline-card.priority-urgent {
+  border-top:5px solid #dc5b62
 }
 .deadline-card.leaving {
   animation:slideout .55s ease forwards

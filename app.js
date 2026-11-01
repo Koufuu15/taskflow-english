@@ -188,15 +188,48 @@ function taskStatus(t) {
 }
 function taskRow(t, compact = false) {
   const status = taskStatus(t);
-  return `<div class="task-row">
+  const priority = ["low", "normal", "high", "urgent"].includes(t.priority)
+    ? t.priority
+    : "normal";
+  return `<div class="task-row priority-${priority}">
 <button class="check ${t.done ? "checked" : ""}" aria-label="Mark complete" onclick="toggleTask('${t.id}')">${t.done ? "✓" : ""}</button>
 <div class="task-copy">
 <strong>${esc(t.name)}</strong>
 <small>${esc(t.memo || "No notes")}</small>
+${taskTagsMarkup(t)}
+${subtasksMarkup(t)}
 </div>
-<span class="badge ${status === "Overdue" ? "red" : ""}">${status}</span>${compact ? "" : `<span class="due">${dateFormat(t.due)}</span>`}<button class="icon-btn" title="Edit" onclick="editTask('${t.id}')">✎</button>
+<span class="badge ${status === "Overdue" ? "red" : ""}">${status}</span><span class="priority-badge">${priorityLabel(priority)}</span>${compact ? "" : `<span class="due">${dateFormat(t.due)}</span>`}<button class="icon-btn" title="Edit" onclick="editTask('${t.id}')">✎</button>
 <button class="icon-btn" title="Delete" onclick="deleteTask('${t.id}')">×</button>
 </div>`;
+}
+function taskTagsMarkup(task) {
+  const tags = Array.isArray(task.tags) ? task.tags.filter(Boolean) : [];
+  return tags.length
+    ? `<div class="task-tags">${tags.map((tag) => `<span class="tag-chip">${esc(tag)}</span>`).join("")}</div>`
+    : "";
+}
+function subtasksMarkup(task) {
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  if (!subtasks.length) return "";
+  const completed = subtasks.filter((subtask) => subtask.done).length;
+  return `<div class="subtask-list">${subtasks
+    .map(
+      (subtask) => `<label class="subtask-item ${subtask.done ? "done" : ""}">
+<input type="checkbox" ${subtask.done ? "checked" : ""} onchange="toggleSubtask('${task.id}','${subtask.id}')">
+<span>${esc(subtask.name)}</span>
+</label>`,
+    )
+    .join(
+      "",
+    )}</div><small class="subtask-progress">${completed}/${subtasks.length} subtasks complete</small>`;
+}
+function priorityLabel(priority) {
+  return (
+    { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" }[
+      priority
+    ] || "Normal"
+  );
 }
 function renderHome() {
   const open = tasks.filter((t) => !t.done);
@@ -240,11 +273,17 @@ function renderDeadlines() {
   if (cards.length) {
     carouselIndex = carouselIndex % cards.length;
     const t = cards[carouselIndex];
+    const priority = ["low", "normal", "high", "urgent"].includes(t.priority)
+      ? t.priority
+      : "normal";
     html += `<div class="deadline-stage">
-<article class="deadline-card" id="carouselCard">
+<article class="deadline-card priority-${priority}" id="carouselCard">
 <span class="badge blue">Deadline card ${carouselIndex + 1} / ${cards.length}</span>
+<span class="priority-badge">${priorityLabel(priority)}</span>
 <h2>${esc(t.name)}</h2>
 <p>${esc(t.memo || "No notes added.")}</p>
+${taskTagsMarkup(t)}
+${subtasksMarkup(t)}
 <div class="deadline-countdown">
 <span class="countdown-label">Time until deadline</span>
 <strong class="countdown-value" data-due="${esc(t.due || "")}">
@@ -302,6 +341,22 @@ function editTask(id) {
   document.getElementById("taskMemo").value = t.memo || "";
   document.getElementById("taskDue").value = t.due || "";
   document.getElementById("taskMode").value = t.mode || "card";
+  document.getElementById("taskTags").value = (
+    Array.isArray(t.tags) ? t.tags : []
+  ).join(", ");
+  document.getElementById("taskPriority").value = [
+    "low",
+    "normal",
+    "high",
+    "urgent",
+  ].includes(t.priority)
+    ? t.priority
+    : "normal";
+  document.getElementById("taskSubtasks").value = (
+    Array.isArray(t.subtasks) ? t.subtasks : []
+  )
+    .map((subtask) => subtask.name)
+    .join("\n");
   document.getElementById("taskFormTitle").textContent = "Edit task";
   document.getElementById("cancelEdit").style.display = "inline-block";
   document.getElementById("taskName").focus();
@@ -312,6 +367,7 @@ function resetTaskForm() {
   document.getElementById("taskFormTitle").textContent = "New task";
   document.getElementById("cancelEdit").style.display = "none";
   document.getElementById("taskMode").value = "card";
+  document.getElementById("taskPriority").value = "normal";
 }
 function deleteTask(id) {
   const t = tasks.find((x) => x.id === id);
@@ -322,6 +378,14 @@ function deleteTask(id) {
   refresh();
   toast("Task deleted.");
 }
+function toggleSubtask(taskId, subtaskId) {
+  const task = tasks.find((item) => item.id === taskId);
+  const subtask = task?.subtasks?.find((item) => item.id === subtaskId);
+  if (!subtask) return;
+  subtask.done = !subtask.done;
+  persist();
+  refresh();
+}
 document.getElementById("taskForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const id = document.getElementById("taskId").value;
@@ -331,6 +395,45 @@ document.getElementById("taskForm").addEventListener("submit", (e) => {
     memo: document.getElementById("taskMemo").value.trim(),
     due: document.getElementById("taskDue").value,
     mode: document.getElementById("taskMode").value,
+    tags: [
+      ...new Set(
+        document
+          .getElementById("taskTags")
+          .value.split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+          .filter(
+            (tag, index, allTags) =>
+              allTags.findIndex(
+                (candidate) => candidate.toLowerCase() === tag.toLowerCase(),
+              ) === index,
+          ),
+      ),
+    ],
+    priority: document.getElementById("taskPriority").value,
+    subtasks: document
+      .getElementById("taskSubtasks")
+      .value.split("\n")
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .filter(
+        (name, index, allNames) =>
+          allNames.findIndex(
+            (candidate) => candidate.toLowerCase() === name.toLowerCase(),
+          ) === index,
+      )
+      .map((name) => {
+        const existing = tasks
+          .find((task) => task.id === id)
+          ?.subtasks?.find(
+            (subtask) => subtask.name.toLowerCase() === name.toLowerCase(),
+          );
+        return {
+          id: existing?.id || crypto.randomUUID(),
+          name,
+          done: existing?.done || false,
+        };
+      }),
     done: false,
   };
   if (id) {

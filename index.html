@@ -273,6 +273,36 @@
                             </div>
 
                             <div class="field">
+                                <label for="taskTags">Tags</label>
+                                <input
+                                    id="taskTags"
+                                    maxlength="200"
+                                    placeholder="e.g. work, design, errands"
+                                >
+                                <small class="field-hint">Separate tags with commas.</small>
+                            </div>
+
+                            <div class="field">
+                                <label for="taskPriority">Urgency</label>
+                                <select id="taskPriority">
+                                    <option value="low">Low</option>
+                                    <option value="normal" selected>Normal</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+
+                            <div class="field full">
+                                <label for="taskSubtasks">Subtasks</label>
+                                <textarea
+                                    id="taskSubtasks"
+                                    maxlength="1200"
+                                    placeholder="One subtask per line"
+                                ></textarea>
+                                <small class="field-hint">Add one subtask per line. You can mark them complete from the task list.</small>
+                            </div>
+
+                            <div class="field">
                                 <label for="taskMode">
                                     Display style on the deadlines page
                                 </label>
