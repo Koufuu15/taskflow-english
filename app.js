@@ -4,6 +4,19 @@ let tasks=read(KEYS.tasks,[]), milestones=read(KEYS.milestones,[5,10,30]), timer
 const pages={home:'Home',deadlines:'Task deadlines',timer:'Focus timer',tasks:'Task settings',reminders:'Reminder settings'};
 const icons={home:'⌂',deadlines:'▣',timer:'◷',tasks:'☷',reminders:'◉'};
 function persist(){localStorage.setItem(KEYS.tasks,JSON.stringify(tasks))}
+let supabaseClient=null, authMode='signin';
+const config=()=>{try{return JSON.parse(localStorage.getItem('taskflow_supabase_config')||'{}')}catch{return {}}};
+function setSyncStatus(state){const labels={local:'Local mode',auth:'Sign in to sync',offline:'Offline · changes saved on this device',syncing:'Syncing…',synced:`Synced · ${new Date().toLocaleTimeString()}`,error:'Sync issue · retrying when connected'};const el=document.getElementById('syncState');if(el)el.textContent=labels[state]||state;}
+function configureSupabase(){const c=config();if(!c.url||!c.key||!window.supabase)return null;return window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})}
+async function activateSession(session){if(!session){await TaskSync.disconnect();tasks=config().url?[]:read(KEYS.tasks,[]);setSyncStatus(config().url?'auth':'local');updateAccount();refresh();return}
+  if(TaskSync.userId===session.user.id){updateAccount();return}
+  if(TaskSync.userId&&TaskSync.userId!==session.user.id){await TaskSync.disconnect();tasks=[];refresh()}
+  supabaseClient=supabaseClient||configureSupabase();if(!supabaseClient){toast('Save the Supabase URL and publishable key first.');return}
+  const cachedTasks=await TaskSync.connect(supabaseClient,session.user,{onChange:list=>{tasks=list;refresh()},onStatus:setSyncStatus});tasks=cachedTasks;refresh();updateAccount();
+  const legacy=read(KEYS.tasks,[]);const marker=`taskflow_migrated_${session.user.id}`;
+  if(legacy.length&&!localStorage.getItem(marker)&&!tasks.length&&TaskSync.confirmedEmptyRemote){for(const t of legacy)await TaskSync.save({...t,id:crypto.randomUUID()});localStorage.setItem(marker,'1');toast('Existing local tasks added to this account.')}
+}
+function updateAccount(){const area=document.getElementById('accountArea');if(!area)return;area.innerHTML=supabaseClient?'<span class="account-email"></span><button class="secondary" id="authOpen">Account</button><button class="secondary" id="signOut">Sign out</button>':'<button class="secondary" id="authOpen">Connect account</button>';supabaseClient?.auth.getUser().then(({data})=>{const span=area.querySelector('.account-email');if(span)span.textContent=data.user?.email||''});document.getElementById('authOpen').onclick=()=>{document.getElementById('authPanel').hidden=false;document.getElementById('configFields').hidden=!!supabaseClient};const out=document.getElementById('signOut');if(out)out.onclick=async()=>{const oldId=TaskSync.userId;await supabaseClient.auth.signOut();await TaskSync.clearAccountCache(oldId);localStorage.removeItem(KEYS.tasks);supabaseClient=null;await activateSession(null);document.getElementById('authPanel').hidden=true};}
 
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function go(id){currentPage=id;
@@ -145,7 +158,8 @@ function renderDeadlines(){const all=document.getElementById('deadlineFilter').v
 </span>`).join('');dots.style.display=cards.length>1?'flex':'none'}
 function renderTaskSettings(){document.getElementById('taskCount').textContent=`${tasks.length} tasks`;
   document.getElementById('taskSettingsList').innerHTML=tasks.length?sortedTasks().map(t=>taskRow(t)).join(''):'<div class="empty">No saved tasks yet.</div>'}
-function toggleTask(id){const t=tasks.find(x=>x.id===id);if(!t)return;t.done=!t.done;persist();refresh();toast(t.done?'Task marked complete.':'Marked as open again.')}
+function saveTaskData(task){if(TaskSync.userId)TaskSync.save(task).catch(()=>setSyncStatus('error'));else{tasks=tasks.map(t=>t.id===task.id?task:t);persist();refresh()}}
+function toggleTask(id){const t=tasks.find(x=>x.id===id);if(!t)return;t.done=!t.done;saveTaskData(t);refresh();toast(t.done?'Task marked complete.':'Marked as open again.')}
 function editTask(id){const t=tasks.find(x=>x.id===id);
   if(!t)return;
   go('tasks');
@@ -162,14 +176,14 @@ function resetTaskForm(){document.getElementById('taskForm').reset();
   document.getElementById('taskFormTitle').textContent='New task';
   document.getElementById('cancelEdit').style.display='none';
   document.getElementById('taskMode').value='card'}
-function deleteTask(id){const t=tasks.find(x=>x.id===id);if(!t)return;if(!confirm(`Delete “${t.name}”?`))return;tasks=tasks.filter(x=>x.id!==id);persist();refresh();toast('Task deleted.')}
+function deleteTask(id){const t=tasks.find(x=>x.id===id);if(!t)return;if(!confirm(`Delete “${t.name}”?`))return;if(TaskSync.userId)TaskSync.remove(t).catch(()=>setSyncStatus('error'));else{tasks=tasks.filter(x=>x.id!==id);persist()}refresh();toast('Task deleted.')}
 document.getElementById('taskForm').addEventListener('submit',e=>{e.preventDefault();
   const id=document.getElementById('taskId').value;
   const data={id:id||crypto.randomUUID(),name:document.getElementById('taskName').value.trim(),memo:document.getElementById('taskMemo').value.trim(),due:document.getElementById('taskDue').value,mode:document.getElementById('taskMode').value,done:false};
   if(id){const old=tasks.find(t=>t.id===id);
   data.done=old?.done||false;
-  tasks=tasks.map(t=>t.id===id?data:t)}else tasks.push(data);
-  persist();
+  if(TaskSync.userId)saveTaskData(data);else tasks=tasks.map(t=>t.id===id?data:t)}else if(TaskSync.userId){TaskSync.save(data).catch(()=>setSyncStatus('error'))}else tasks.push(data);
+  if(!TaskSync.userId)persist();
   resetTaskForm();
   refresh();
   toast('Task saved.')});
@@ -266,6 +280,12 @@ function init(){initNav();
   renderTimer();
   setInterval(tick,1000);
   setInterval(()=>{if(currentPage==='deadlines')advanceCarousel()},7000);
+  document.getElementById('authOpen').onclick=()=>{document.getElementById('authPanel').hidden=false};
+  document.getElementById('authMode').onclick=()=>{authMode=authMode==='signin'?'signup':'signin';document.getElementById('authTitle').textContent=authMode==='signin'?'Sign in':'Create account';document.getElementById('authMode').textContent=authMode==='signin'?'Create account':'Back to sign in'};
+  document.getElementById('saveConfig').onclick=async()=>{const url=document.getElementById('projectUrl').value.trim(),key=document.getElementById('publishableKey').value.trim();if(!url||!key){toast('Enter both Supabase settings.');return}localStorage.setItem('taskflow_supabase_config',JSON.stringify({url,key}));supabaseClient=configureSupabase();document.getElementById('configFields').hidden=true;updateAccount();toast('Supabase connection settings saved.')};
+  document.getElementById('authForm').addEventListener('submit',async e=>{e.preventDefault();supabaseClient=supabaseClient||configureSupabase();if(!supabaseClient){toast('Enter Supabase project settings first.');return}const email=document.getElementById('authEmail').value,password=document.getElementById('authPassword').value;const result=authMode==='signup'?await supabaseClient.auth.signUp({email,password}):await supabaseClient.auth.signInWithPassword({email,password});if(result.error){toast(result.error.message);return}if(result.data.session)await activateSession(result.data.session);else toast('Check your email to confirm the new account.');document.getElementById('authPanel').hidden=true});
+  document.getElementById('resetPassword').onclick=async()=>{supabaseClient=supabaseClient||configureSupabase();if(!supabaseClient)return toast('Enter Supabase settings first.');const email=document.getElementById('authEmail').value;if(!email)return toast('Enter your email address first.');const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:location.href});toast(error?error.message:'Password reset email sent.')};
+  updateAccount();supabaseClient=configureSupabase();if(supabaseClient){tasks=[];refresh();supabaseClient.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>activateSession(session),0)});supabaseClient.auth.getSession().then(({data})=>activateSession(data.session));}else setSyncStatus('local');
   if(timer?.running){const elapsed=Math.floor((Date.now()-timer.startedAt)/60000);
   const due=milestones.find(m=>m<=elapsed&&!(timer.fired||[]).includes(m));
   if(due!==undefined)setTimeout(()=>fireMilestone(due),500)}}

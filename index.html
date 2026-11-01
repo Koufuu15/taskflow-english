@@ -35,6 +35,8 @@
 <div class="date-chip" id="today">
 </div>
 </div>
+<section class="sync-bar" id="syncBar"><span id="syncState">Local mode</span><span id="accountArea"><button class="secondary" id="authOpen">Connect account</button></span></section>
+<section class="panel auth-panel" id="authPanel" hidden><h2 id="authTitle">Sign in</h2><form id="authForm"><div class="field"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required></div><div class="field"><label for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" minlength="6" required></div><div class="form-actions"><button class="secondary" type="button" id="authMode">Create account</button><button class="secondary" type="button" id="resetPassword">Reset password</button><button class="primary" type="submit">Continue</button></div></form><div class="field" id="configFields"><label for="projectUrl">Supabase project URL and publishable key</label><input id="projectUrl" type="url" placeholder="https://your-project.supabase.co"><input id="publishableKey" type="password" placeholder="sb_publishable_…"><button type="button" class="secondary" id="saveConfig">Save connection</button></div></section>
 <section class="page active" id="home">
 <div class="hero">
 <div>
@@ -214,6 +216,8 @@
 </div>
 <div class="toast" id="toast">
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync-service.js"></script>
 <script src="app.js" defer></script>
 </body>
 </html>

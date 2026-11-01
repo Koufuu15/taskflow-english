@@ -1,37 +1,33 @@
 # Taskflow — Tasks & Time
 
-Taskflow is a lightweight, browser-based task manager and focus timer. It runs as a static site and does not require a server, build step, package installation, or account.
+Static HTML/CSS/JavaScript task manager. Existing task fields and focus timer are retained. Tasks remain local without a Supabase connection; when connected, Supabase Auth, PostgreSQL, Realtime and a per-account IndexedDB cache provide cross-device sync and offline edits.
 
-## Features
+## Setup
 
-- **Home dashboard** with open-task and due-today counts, timer status, quick links, and upcoming tasks.
-- **Task deadlines** displayed as individual cards or a task list. Card-view tasks rotate automatically, and each card shows a live countdown to its deadline.
-- **Task management** to add, edit, complete, and delete tasks, with an optional note, deadline, and per-task display style.
-- **Focus timer** that continues while you move between pages. Its start time and fired reminders are saved so elapsed time can be recalculated when you return to the site.
-- **Multiple timer reminders** scheduled by elapsed minutes, with an on-page alert and browser speech synthesis.
-- **Responsive layout** for desktop and mobile screens.
+1. Create a Supabase project and enable Email auth under **Authentication → Providers**. Configure email confirmation and password reset redirect URLs for your deployed site.
+2. Run [`supabase/migrations/202611010001_tasks_sync.sql`](supabase/migrations/202611010001_tasks_sync.sql) in the Supabase SQL Editor (or `supabase db push` after linking the Supabase CLI project).
+3. Serve this directory over HTTPS (or localhost); opening `index.html` as `file://` is not suitable for Auth redirects or IndexedDB in all browsers.
+4. Choose **Connect account**, enter the project URL and the browser-safe `sb_publishable_...` key from Project Settings → API Keys. Settings are stored in this browser's localStorage. Sign up or sign in with email/password.
 
-## Run locally
+No build step or `.env` is needed for static hosting. For a deployment pipeline, the URL and publishable key can instead be injected into the page by your hosting setup; never use a service-role or secret key in browser code. The Supabase JS v2 SDK is loaded from jsDelivr.
 
-1. Download or clone this project.
-2. Open `index.html` in a modern browser.
+## Database and access control
 
-No build command is needed. The app uses the browser's `localStorage` to keep tasks, reminder intervals, and timer state in that browser profile. Clearing site data or using another browser/profile will not carry that data over.
+`public.tasks` stores `id`, `user_id`, `name`, `memo`, `due`, `mode`, `done`, `updated_at`, and `deleted_at`. Row Level Security is forced on; policies restrict every operation to `auth.uid() = user_id`. Deletes are represented as tombstones (`deleted_at`) so offline devices can observe them. The migration adds the table to `supabase_realtime`.
 
-## Publish with GitHub Pages
+## Local and offline behavior
 
-This project is a static site. In the repository on GitHub:
+Authenticated task snapshots and a durable mutation queue are stored in IndexedDB, partitioned by authenticated user ID. Writes render optimistically, then retry against Supabase when connectivity returns. Realtime updates are filtered by user and merged only when their `updated_at` is newer. Old localStorage tasks are imported once per account when its remote task list is empty. Logging out clears that account's local cache and task queue; the shared legacy localStorage list is not used as an account cache. Timer and reminder preferences remain local to the browser.
 
-1. Open **Settings → Pages**.
-2. Under **Build and deployment**, choose **Deploy from a branch**.
-3. Select the branch containing these files and the **/(root)** folder, then save.
-4. Wait for the Pages deployment to finish. GitHub will show the published URL in the Pages settings.
+Conflict handling is timestamp based: a strictly newer server row wins over a queued older snapshot; otherwise the queued snapshot is uploaded. This avoids unconditional overwrites but is not field-level merging and depends on reasonably synchronized device clocks. Hard deletes from external SQL clients cannot be synchronized as tombstones; use the app's soft-delete flow. For strict multi-writer guarantees, use server-assigned revisions/transactions and conflict UI rather than relying on client timestamps.
 
-The `index.html`, `app.js`, and `styles.css` files must stay together in the published folder.
+## Run and deploy
 
-## Browser notes
+Run a local static server (for example `python -m http.server 8000`) and visit `http://localhost:8000`. GitHub Pages or any HTTPS static host can serve the files; keep `index.html`, `app.js`, `sync-service.js`, and `styles.css` together. Add the deployed origin to Supabase Auth's allowed redirect URLs.
 
-- Timer elapsed time can be recalculated after returning to the page, but a browser tab cannot guarantee an exact alert while the browser is fully closed or suspended by the operating system.
-- Voice alerts use the browser's speech-synthesis API and the voices installed on the device. The selected voice can vary by browser and operating system.
-- Audio playback may require interacting with the page first, depending on browser autoplay rules.
-- Task and timer data stays in that browser's local storage; it is not synced to a server.
+## Limitations
+
+- Auth, Realtime, migration, and offline reconciliation need a configured Supabase project; they cannot be verified from this repository alone.
+- The SDK CDN must load at least once to initialize Auth. A service worker/app-shell cache is not included, so a first-ever offline visit cannot load the app.
+- Email confirmation, SMTP delivery, provider limits, domain redirects, and project credentials must be configured in Supabase.
+- Browser clock skew may affect last-write-wins resolution. Concurrent edits to the same task are whole-record updates.
