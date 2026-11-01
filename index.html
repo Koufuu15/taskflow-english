@@ -7,6 +7,7 @@
 
     <title>Taskflow — Tasks &amp; Time</title>
 
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -273,13 +274,18 @@
                             </div>
 
                             <div class="field">
-                                <label for="taskTags">Tags</label>
-                                <input
-                                    id="taskTags"
-                                    maxlength="200"
-                                    placeholder="e.g. work, design, errands"
-                                >
-                                <small class="field-hint">Separate tags with commas.</small>
+                                <label for="tagInput">Tags</label>
+                                <div class="tag-select" id="tagSelect">
+                                    <div class="selected-tags" id="selectedTaskTags"></div>
+                                    <input
+                                        id="tagInput"
+                                        autocomplete="off"
+                                        placeholder="Choose or create tags"
+                                        aria-describedby="tagHelp"
+                                    >
+                                    <div class="tag-options" id="tagOptions" hidden></div>
+                                </div>
+                                <small class="field-hint" id="tagHelp">Select multiple tags or type a new tag and press Enter.</small>
                             </div>
 
                             <div class="field">
@@ -293,13 +299,12 @@
                             </div>
 
                             <div class="field full">
-                                <label for="taskSubtasks">Subtasks</label>
-                                <textarea
-                                    id="taskSubtasks"
-                                    maxlength="1200"
-                                    placeholder="One subtask per line"
-                                ></textarea>
-                                <small class="field-hint">Add one subtask per line. You can mark them complete from the task list.</small>
+                                <label>Subtasks</label>
+                                <div class="subtask-editor" id="subtaskEditor">
+                                    <div class="subtask-editor-tree" id="taskSubtaskTree"></div>
+                                    <button type="button" class="secondary" id="addRootSubtask">＋ Add subtask</button>
+                                </div>
+                                <small class="field-hint">Each subtask can have its own deadline and any number of nested subtasks.</small>
                             </div>
 
                             <div class="field">
