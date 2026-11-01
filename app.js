@@ -8,15 +8,18 @@ let supabaseClient=null, authMode='signin';
 const config=()=>{try{return JSON.parse(localStorage.getItem('taskflow_supabase_config')||'{}')}catch{return {}}};
 function setSyncStatus(state){const labels={local:'Local mode',auth:'Sign in to sync',offline:'Offline · changes saved on this device',syncing:'Syncing…',synced:`Synced · ${new Date().toLocaleTimeString()}`,error:'Sync issue · retrying when connected'};const el=document.getElementById('syncState');if(el)el.textContent=labels[state]||state;}
 function configureSupabase(){const c=config();if(!c.url||!c.key||!window.supabase)return null;return window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})}
-async function activateSession(session){if(!session){await TaskSync.disconnect();tasks=config().url?[]:read(KEYS.tasks,[]);setSyncStatus(config().url?'auth':'local');updateAccount();refresh();return}
+function applySyncedPreferences(value){if(!value)return;if(Array.isArray(value.reminders))milestones=[...new Set(value.reminders.map(Number).filter(x=>Number.isInteger(x)&&x>0&&x<=1440))].sort((a,b)=>a-b);timer=value.timer||null;localStorage.setItem(KEYS.milestones,JSON.stringify(milestones));if(timer)localStorage.setItem(KEYS.timer,JSON.stringify(timer));else localStorage.removeItem(KEYS.timer);renderReminderSettings();renderMilestoneViews();renderTimer();}
+async function activateSession(session){if(!session){const wasSignedIn=Boolean(TaskSync.userId),configured=Boolean(config().url);await TaskSync.disconnect();tasks=configured?[]:read(KEYS.tasks,[]);if(wasSignedIn&&configured){for(const k of [KEYS.milestones,KEYS.timer])localStorage.removeItem(k);milestones=[5,10,30];timer=null;renderReminderSettings();renderMilestoneViews();renderTimer()}setSyncStatus(configured?'auth':'local');updateAccount();refresh();return}
   if(TaskSync.userId===session.user.id){updateAccount();return}
   if(TaskSync.userId&&TaskSync.userId!==session.user.id){await TaskSync.disconnect();tasks=[];refresh()}
   supabaseClient=supabaseClient||configureSupabase();if(!supabaseClient){toast('Save the Supabase URL and publishable key first.');return}
-  const cachedTasks=await TaskSync.connect(supabaseClient,session.user,{onChange:list=>{tasks=list;refresh()},onStatus:setSyncStatus});tasks=cachedTasks;refresh();updateAccount();
+  const cachedTasks=await TaskSync.connect(supabaseClient,session.user,{onChange:list=>{tasks=list;refresh()},onSettings:applySyncedPreferences,onStatus:setSyncStatus});tasks=cachedTasks;refresh();updateAccount();
+  const cachedPreferences=await TaskSync.cachedPreferences();
+  if(!cachedPreferences&&TaskSync.confirmedEmptySettings){const migrated=await TaskSync.savePreferences({reminders:milestones,timer});applySyncedPreferences(migrated)}
   const legacy=read(KEYS.tasks,[]);const marker=`taskflow_migrated_${session.user.id}`;
   if(legacy.length&&!localStorage.getItem(marker)&&!tasks.length&&TaskSync.confirmedEmptyRemote){for(const t of legacy)await TaskSync.save({...t,id:crypto.randomUUID()});localStorage.setItem(marker,'1');toast('Existing local tasks added to this account.')}
 }
-function updateAccount(){const area=document.getElementById('accountArea');if(!area)return;area.innerHTML=supabaseClient?'<span class="account-email"></span><button class="secondary" id="authOpen">Account</button><button class="secondary" id="signOut">Sign out</button>':'<button class="secondary" id="authOpen">Connect account</button>';supabaseClient?.auth.getUser().then(({data})=>{const span=area.querySelector('.account-email');if(span)span.textContent=data.user?.email||''});document.getElementById('authOpen').onclick=()=>{document.getElementById('authPanel').hidden=false;document.getElementById('configFields').hidden=!!supabaseClient};const out=document.getElementById('signOut');if(out)out.onclick=async()=>{const oldId=TaskSync.userId;await supabaseClient.auth.signOut();await TaskSync.clearAccountCache(oldId);localStorage.removeItem(KEYS.tasks);supabaseClient=null;await activateSession(null);document.getElementById('authPanel').hidden=true};}
+function updateAccount(){const area=document.getElementById('accountArea');if(!area)return;area.innerHTML=supabaseClient?'<span class="account-email"></span><button class="secondary" id="authOpen">Account</button><button class="secondary" id="signOut">Sign out</button>':'<button class="secondary" id="authOpen">Connect account</button>';supabaseClient?.auth.getUser().then(({data})=>{const span=area.querySelector('.account-email');if(span)span.textContent=data.user?.email||''});document.getElementById('authOpen').onclick=()=>{document.getElementById('authPanel').hidden=false;document.getElementById('configFields').hidden=!!supabaseClient};const out=document.getElementById('signOut');if(out)out.onclick=async()=>{const oldId=TaskSync.userId;await supabaseClient.auth.signOut();await TaskSync.clearAccountCache(oldId);for(const k of [KEYS.tasks,KEYS.milestones,KEYS.timer])localStorage.removeItem(k);milestones=[5,10,30];timer=null;renderReminderSettings();renderMilestoneViews();renderTimer();supabaseClient=null;await activateSession(null);document.getElementById('authPanel').hidden=true};}
 
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function go(id){currentPage=id;
@@ -192,8 +195,10 @@ function renderReminderSettings(){document.getElementById('milestoneCount').text
 </span>`).join(''):'<span style="font-size:12px;color:var(--muted)">No reminder intervals added.</span>'}
 function renderMilestoneViews(){const html=milestones.map(m=>`<span class="milestone">${m} min later</span>`).join('')||'<span style="font-size:12px;color:var(--muted)">Not configured</span>';
   document.getElementById('timerMilestones').innerHTML=html}
+function persistPreferences(){localStorage.setItem(KEYS.milestones,JSON.stringify(milestones));if(timer)localStorage.setItem(KEYS.timer,JSON.stringify(timer));else localStorage.removeItem(KEYS.timer);if(TaskSync.userId)TaskSync.savePreferences({reminders:milestones,timer}).catch(()=>setSyncStatus('error'))}
 function saveMilestones(){milestones=[...new Set(milestones.map(Number).filter(x=>Number.isFinite(x)&&x>0))].sort((a,b)=>a-b);
   localStorage.setItem(KEYS.milestones,JSON.stringify(milestones));
+  if(TaskSync.userId)TaskSync.savePreferences({reminders:milestones,timer}).catch(()=>setSyncStatus('error'));
   renderReminderSettings();
   renderMilestoneViews()}
 function addMilestone(){const m=Number(document.getElementById('milestoneMinutes').value);
@@ -228,24 +233,24 @@ function renderTimer(){const running=Boolean(timer?.running);
   renderHome()}
 function startTimer(){try{const ctx=new (window.AudioContext||window.webkitAudioContext)();
   ctx.resume()}catch{}timer={startedAt:Date.now(),running:true,fired:[]};
-  localStorage.setItem(KEYS.timer,JSON.stringify(timer));
+  persistPreferences();
   renderTimer();
   toast('Timer started')}
 function stopTimer(){if(!timer)return;
   timer.running=false;
   timer.stoppedAt=Date.now();
-  localStorage.setItem(KEYS.timer,JSON.stringify(timer));
+  persistPreferences();
   renderTimer();
   toast('Timer stopped')}
 function clearTimer(){timer=null;
-  localStorage.removeItem(KEYS.timer);
+  persistPreferences();
   renderTimer();
   toast('Timer reset')}
 function announce(text){if(!('speechSynthesis'in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(text);utter.lang='en-US';utter.rate=1.05;window.speechSynthesis.speak(utter)}
 function fireMilestone(m){timer.fired=timer.fired||[];
   if(timer.fired.includes(m))return;
   timer.fired.push(m);
-  localStorage.setItem(KEYS.timer,JSON.stringify(timer));
+  persistPreferences();
   document.getElementById('alertTime').textContent=`Elapsed ${m} min`;
   document.getElementById('alertTitle').textContent='Reminder time';
   document.getElementById('alertMessage').textContent=`Since timer started${m} minutes have passed. Consider taking a short break or reviewing your next task.`;
