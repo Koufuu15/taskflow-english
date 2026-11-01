@@ -89,6 +89,58 @@ function dateFormat(value, withTime = true) {
     ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   }).format(d);
 }
+function recurrenceLabel(recurrence) {
+  return (
+    {
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      yearly: "Yearly",
+    }[recurrence] || ""
+  );
+}
+function toLocalDateTimeValue(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+function nextRecurringDue(task, now = Date.now()) {
+  const recurrence = task.recurrence;
+  if (!recurrenceLabel(recurrence)) return "";
+  const due = task.due ? new Date(task.due) : new Date(now);
+  if (Number.isNaN(due.getTime())) return toLocalDateTimeValue(new Date(now));
+  const anchorDay = task.recurrenceDay || due.getDate();
+  const anchorMonth = task.recurrenceMonth ?? due.getMonth();
+  const advance = (date) => {
+    const next = new Date(date);
+    if (recurrence === "daily") {
+      next.setDate(next.getDate() + 1);
+      return next;
+    }
+    if (recurrence === "weekly") {
+      next.setDate(next.getDate() + 7);
+      return next;
+    }
+    const year = next.getFullYear() + (recurrence === "yearly" ? 1 : 0);
+    const month = recurrence === "yearly" ? anchorMonth : next.getMonth() + 1;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return new Date(
+      year,
+      month,
+      Math.min(anchorDay, daysInMonth),
+      next.getHours(),
+      next.getMinutes(),
+      next.getSeconds(),
+      next.getMilliseconds(),
+    );
+  };
+  let next = advance(due);
+  let skippedOccurrences = 0;
+  while (next.getTime() <= now && skippedOccurrences < 10000) {
+    next = advance(next);
+    skippedOccurrences += 1;
+  }
+  return toLocalDateTimeValue(next);
+}
 function getCountdown(due) {
   if (!due) {
     return {
@@ -200,7 +252,7 @@ function taskRow(t, compact = false) {
 ${taskTagsMarkup(t)}
 ${subtasksMarkup(t)}
 </div>
-<span class="badge ${status === "Overdue" ? "red" : ""}">${status}</span><span class="priority-badge">${priorityLabel(priority)}</span>${compact ? "" : `<span class="due">${dateFormat(t.due)}</span>`}<button class="icon-btn" title="Edit" onclick="editTask('${t.id}')">✎</button>
+<span class="badge ${status === "Overdue" ? "red" : ""}">${status}</span><span class="priority-badge">${priorityLabel(priority)}</span>${recurrenceLabel(t.recurrence) ? `<span class="recurrence-badge">↻ ${recurrenceLabel(t.recurrence)}</span>` : ""}${compact ? "" : `<span class="due">${dateFormat(t.due)}</span>`}<button class="icon-btn" title="Edit" onclick="editTask('${t.id}')">✎</button>
 <button class="icon-btn" title="Delete" onclick="deleteTask('${t.id}')">×</button>
 </div>`;
 }
@@ -467,6 +519,7 @@ function renderDeadlines() {
 <article class="deadline-card priority-${priority}" id="carouselCard">
 <span class="badge blue">Deadline card ${carouselIndex + 1} / ${cards.length}</span>
 <span class="priority-badge">${priorityLabel(priority)}</span>
+${recurrenceLabel(t.recurrence) ? `<span class="recurrence-badge">↻ ${recurrenceLabel(t.recurrence)}</span>` : ""}
 <h2>${esc(t.name)}</h2>
 <p>${esc(t.memo || "No notes added.")}</p>
 ${taskTagsMarkup(t)}
@@ -514,6 +567,14 @@ function renderTaskSettings() {
 function toggleTask(id) {
   const t = tasks.find((x) => x.id === id);
   if (!t) return;
+  if (recurrenceLabel(t.recurrence) && !t.done) {
+    t.due = nextRecurringDue(t);
+    t.done = false;
+    persist();
+    refresh();
+    toast(`Next occurrence: ${dateFormat(t.due)}`);
+    return;
+  }
   t.done = !t.done;
   persist();
   refresh();
@@ -527,6 +588,11 @@ function editTask(id) {
   document.getElementById("taskName").value = t.name;
   document.getElementById("taskMemo").value = t.memo || "";
   document.getElementById("taskDue").value = t.due || "";
+  document.getElementById("taskRecurrence").value = recurrenceLabel(
+    t.recurrence,
+  )
+    ? t.recurrence
+    : "none";
   document.getElementById("taskMode").value = t.mode || "card";
   setSelectedTags(Array.isArray(t.tags) ? t.tags : []);
   document.getElementById("taskPriority").value = [
@@ -548,6 +614,7 @@ function resetTaskForm() {
   document.getElementById("taskFormTitle").textContent = "New task";
   document.getElementById("cancelEdit").style.display = "none";
   document.getElementById("taskMode").value = "card";
+  document.getElementById("taskRecurrence").value = "none";
   document.getElementById("taskPriority").value = "normal";
   setSelectedTags();
   renderSubtaskEditor();
@@ -577,6 +644,7 @@ document.getElementById("taskForm").addEventListener("submit", (e) => {
     name: document.getElementById("taskName").value.trim(),
     memo: document.getElementById("taskMemo").value.trim(),
     due: document.getElementById("taskDue").value,
+    recurrence: document.getElementById("taskRecurrence").value,
     mode: document.getElementById("taskMode").value,
     tags: [...selectedTags],
     priority: document.getElementById("taskPriority").value,
@@ -586,8 +654,30 @@ document.getElementById("taskForm").addEventListener("submit", (e) => {
   if (id) {
     const old = tasks.find((t) => t.id === id);
     data.done = old?.done || false;
+    const recurrenceAnchorChanged =
+      !old || old.recurrence !== data.recurrence || old.due !== data.due;
+    const anchorDate = data.due ? new Date(data.due) : new Date();
+    data.recurrenceDay = ["monthly", "yearly"].includes(data.recurrence)
+      ? recurrenceAnchorChanged
+        ? anchorDate.getDate()
+        : (old.recurrenceDay ?? anchorDate.getDate())
+      : null;
+    data.recurrenceMonth =
+      data.recurrence === "yearly"
+        ? recurrenceAnchorChanged
+          ? anchorDate.getMonth()
+          : (old.recurrenceMonth ?? anchorDate.getMonth())
+        : null;
     tasks = tasks.map((t) => (t.id === id ? data : t));
-  } else tasks.push(data);
+  } else {
+    const anchorDate = data.due ? new Date(data.due) : new Date();
+    data.recurrenceDay = ["monthly", "yearly"].includes(data.recurrence)
+      ? anchorDate.getDate()
+      : null;
+    data.recurrenceMonth =
+      data.recurrence === "yearly" ? anchorDate.getMonth() : null;
+    tasks.push(data);
+  }
   persist();
   resetTaskForm();
   refresh();

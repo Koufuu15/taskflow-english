@@ -433,6 +433,15 @@ h2 {
   font-weight:700;
   white-space:nowrap
 }
+.recurrence-badge {
+  border-radius:999px;
+  padding:5px 9px;
+  background:#e8f7f0;
+  color:#32896b;
+  font-size:10px;
+  font-weight:700;
+  white-space:nowrap
+}
 .priority-low .priority-badge {
   background:#e7f2fc;
   color:#3975a8
