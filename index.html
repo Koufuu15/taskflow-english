@@ -7,6 +7,7 @@
 
     <title>Taskflow — Tasks &amp; Time</title>
 
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -263,6 +264,18 @@
                                 >
                             </div>
 
+                            <div class="field">
+                                <label for="taskRecurrence">Repeat</label>
+                                <select id="taskRecurrence">
+                                    <option value="none">Does not repeat</option>
+                                    <option value="daily">Every day</option>
+                                    <option value="weekly">Every week</option>
+                                    <option value="monthly">Every month</option>
+                                    <option value="yearly">Every year</option>
+                                </select>
+                                <small class="field-hint">Completing this task schedules its next occurrence. Choose Does not repeat to stop the schedule.</small>
+                            </div>
+
                             <div class="field full">
                                 <label for="taskMemo">Notes</label>
                                 <textarea
@@ -270,6 +283,40 @@
                                     maxlength="500"
                                     placeholder="Add a note or reminder"
                                 ></textarea>
+                            </div>
+
+                            <div class="field">
+                                <label for="tagInput">Tags</label>
+                                <div class="tag-select" id="tagSelect">
+                                    <div class="selected-tags" id="selectedTaskTags"></div>
+                                    <input
+                                        id="tagInput"
+                                        autocomplete="off"
+                                        placeholder="Choose or create tags"
+                                        aria-describedby="tagHelp"
+                                    >
+                                    <div class="tag-options" id="tagOptions" hidden></div>
+                                </div>
+                                <small class="field-hint" id="tagHelp">Select multiple tags or type a new tag and press Enter.</small>
+                            </div>
+
+                            <div class="field">
+                                <label for="taskPriority">Urgency</label>
+                                <select id="taskPriority">
+                                    <option value="low">Low</option>
+                                    <option value="normal" selected>Normal</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </div>
+
+                            <div class="field full">
+                                <label>Subtasks</label>
+                                <div class="subtask-editor" id="subtaskEditor">
+                                    <div class="subtask-editor-tree" id="taskSubtaskTree"></div>
+                                    <button type="button" class="secondary" id="addRootSubtask">＋ Add subtask</button>
+                                </div>
+                                <small class="field-hint">Each subtask can have its own deadline and any number of nested subtasks.</small>
                             </div>
 
                             <div class="field">

@@ -7,6 +7,9 @@ Taskflow is a lightweight, browser-based task manager and focus timer. It runs a
 - **Home dashboard** with open-task and due-today counts, timer status, quick links, and upcoming tasks.
 - **Task deadlines** displayed as individual cards or a task list. Card-view tasks rotate automatically, and each card shows a live countdown to its deadline.
 - **Task management** to add, edit, complete, and delete tasks, with an optional note, deadline, and per-task display style.
+- **Recurring tasks** on a daily, weekly, monthly, or yearly schedule. Completing a recurring task advances it to the next occurrence; monthly and yearly schedules retain their original calendar day.
+- **Task organization** with a creatable multi-select for tags, recursively nested subtasks with individual deadlines and completion states, and Low, Normal, High, or Urgent priority colors.
+- **Taskflow favicon** as a scalable SVG app icon.
 - **Focus timer** that continues while you move between pages. Its start time and fired reminders are saved so elapsed time can be recalculated when you return to the site.
 - **Metronome** that plays while the focus timer runs. Turn it on or off from the Focus timer screen and adjust the tempo from 30 to 240 BPM.
 - **Multiple timer reminders** scheduled by elapsed minutes, with an on-page alert and browser speech synthesis.

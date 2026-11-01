@@ -19,6 +19,7 @@ let tasks = read(KEYS.tasks, []),
   currentPage = "home",
   carouselIndex = 0,
   toastTimer = null;
+let selectedTags = [];
 let audioContext = null,
   metronomeSource = null,
   metronomeBuffer = null,
@@ -87,6 +88,58 @@ function dateFormat(value, withTime = true) {
     day: "numeric",
     ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   }).format(d);
+}
+function recurrenceLabel(recurrence) {
+  return (
+    {
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      yearly: "Yearly",
+    }[recurrence] || ""
+  );
+}
+function toLocalDateTimeValue(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+function nextRecurringDue(task, now = Date.now()) {
+  const recurrence = task.recurrence;
+  if (!recurrenceLabel(recurrence)) return "";
+  const due = task.due ? new Date(task.due) : new Date(now);
+  if (Number.isNaN(due.getTime())) return toLocalDateTimeValue(new Date(now));
+  const anchorDay = task.recurrenceDay || due.getDate();
+  const anchorMonth = task.recurrenceMonth ?? due.getMonth();
+  const advance = (date) => {
+    const next = new Date(date);
+    if (recurrence === "daily") {
+      next.setDate(next.getDate() + 1);
+      return next;
+    }
+    if (recurrence === "weekly") {
+      next.setDate(next.getDate() + 7);
+      return next;
+    }
+    const year = next.getFullYear() + (recurrence === "yearly" ? 1 : 0);
+    const month = recurrence === "yearly" ? anchorMonth : next.getMonth() + 1;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return new Date(
+      year,
+      month,
+      Math.min(anchorDay, daysInMonth),
+      next.getHours(),
+      next.getMinutes(),
+      next.getSeconds(),
+      next.getMilliseconds(),
+    );
+  };
+  let next = advance(due);
+  let skippedOccurrences = 0;
+  while (next.getTime() <= now && skippedOccurrences < 10000) {
+    next = advance(next);
+    skippedOccurrences += 1;
+  }
+  return toLocalDateTimeValue(next);
 }
 function getCountdown(due) {
   if (!due) {
@@ -188,15 +241,234 @@ function taskStatus(t) {
 }
 function taskRow(t, compact = false) {
   const status = taskStatus(t);
-  return `<div class="task-row">
+  const priority = ["low", "normal", "high", "urgent"].includes(t.priority)
+    ? t.priority
+    : "normal";
+  return `<div class="task-row priority-${priority}">
 <button class="check ${t.done ? "checked" : ""}" aria-label="Mark complete" onclick="toggleTask('${t.id}')">${t.done ? "✓" : ""}</button>
 <div class="task-copy">
 <strong>${esc(t.name)}</strong>
 <small>${esc(t.memo || "No notes")}</small>
+${taskTagsMarkup(t)}
+${subtasksMarkup(t)}
 </div>
-<span class="badge ${status === "Overdue" ? "red" : ""}">${status}</span>${compact ? "" : `<span class="due">${dateFormat(t.due)}</span>`}<button class="icon-btn" title="Edit" onclick="editTask('${t.id}')">✎</button>
+<span class="badge ${status === "Overdue" ? "red" : ""}">${status}</span><span class="priority-badge">${priorityLabel(priority)}</span>${recurrenceLabel(t.recurrence) ? `<span class="recurrence-badge">↻ ${recurrenceLabel(t.recurrence)}</span>` : ""}${compact ? "" : `<span class="due">${dateFormat(t.due)}</span>`}<button class="icon-btn" title="Edit" onclick="editTask('${t.id}')">✎</button>
 <button class="icon-btn" title="Delete" onclick="deleteTask('${t.id}')">×</button>
 </div>`;
+}
+function taskTagsMarkup(task) {
+  const tags = Array.isArray(task.tags) ? task.tags.filter(Boolean) : [];
+  return tags.length
+    ? `<div class="task-tags">${tags.map((tag) => `<span class="tag-chip">${esc(tag)}</span>`).join("")}</div>`
+    : "";
+}
+function subtasksMarkup(task) {
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+  if (!subtasks.length) return "";
+  const allSubtasks = flattenSubtasks(subtasks);
+  const completed = allSubtasks.filter((subtask) => subtask.done).length;
+  return `<div class="subtask-list">${subtasks
+    .map((subtask) => subtaskViewMarkup(task.id, subtask))
+    .join(
+      "",
+    )}</div><small class="subtask-progress">${completed}/${allSubtasks.length} subtasks complete</small>`;
+}
+function flattenSubtasks(subtasks = []) {
+  return subtasks.flatMap((subtask) => [
+    subtask,
+    ...flattenSubtasks(subtask.children || []),
+  ]);
+}
+function subtaskViewMarkup(taskId, subtask) {
+  const children = Array.isArray(subtask.children) ? subtask.children : [];
+  return `<div class="subtask-node">
+<label class="subtask-item ${subtask.done ? "done" : ""}">
+<input type="checkbox" ${subtask.done ? "checked" : ""} onchange="toggleSubtask('${taskId}','${subtask.id}')">
+<span>${esc(subtask.name)}${subtask.due ? ` <small class="subtask-due">· ${dateFormat(subtask.due)}</small>` : ""}</span>
+</label>
+${children.length ? `<div class="subtask-children-view">${children.map((child) => subtaskViewMarkup(taskId, child)).join("")}</div>` : ""}
+</div>`;
+}
+function normalizeSubtasks(subtasks = []) {
+  if (!Array.isArray(subtasks)) return [];
+  return subtasks.map((subtask) => ({
+    id: subtask.id || crypto.randomUUID(),
+    name: String(subtask.name || ""),
+    due: subtask.due || "",
+    done: Boolean(subtask.done),
+    children: normalizeSubtasks(subtask.children),
+  }));
+}
+function subtaskEditorItem(subtask = {}) {
+  const id = subtask.id || crypto.randomUUID();
+  return `<div class="subtask-editor-item" data-subtask-id="${esc(id)}">
+<input type="hidden" class="subtask-editor-id" value="${esc(id)}">
+<div class="subtask-editor-fields">
+<label>Subtask name<input class="subtask-editor-name" maxlength="100" value="${esc(subtask.name || "")}" placeholder="e.g. Draft the outline" required></label>
+<label>Deadline<input class="subtask-editor-due" type="datetime-local" value="${esc(subtask.due || "")}"></label>
+<label class="subtask-editor-done"><input class="subtask-editor-done-input" type="checkbox" ${subtask.done ? "checked" : ""}>Complete</label>
+</div>
+<div class="subtask-editor-children">${normalizeSubtasks(subtask.children).map(subtaskEditorItem).join("")}</div>
+<div class="subtask-editor-actions"><button type="button" class="secondary" data-subtask-action="add-child">＋ Add nested subtask</button><button type="button" class="text-button" data-subtask-action="remove">Remove</button></div>
+</div>`;
+}
+function renderSubtaskEditor(subtasks = []) {
+  document.getElementById("taskSubtaskTree").innerHTML = normalizeSubtasks(
+    subtasks,
+  )
+    .map(subtaskEditorItem)
+    .join("");
+}
+function collectSubtaskEditors(container) {
+  return [...container.children]
+    .filter((element) => element.matches(".subtask-editor-item"))
+    .map((element) => ({
+      id: element.querySelector(".subtask-editor-id").value,
+      name: element.querySelector(".subtask-editor-name").value.trim(),
+      due: element.querySelector(".subtask-editor-due").value,
+      done: element.querySelector(".subtask-editor-done-input").checked,
+      children: collectSubtaskEditors(
+        element.querySelector(".subtask-editor-children"),
+      ),
+    }))
+    .filter((subtask) => subtask.name);
+}
+function findSubtask(subtasks, id) {
+  for (const subtask of subtasks || []) {
+    if (subtask.id === id) return subtask;
+    const nested = findSubtask(subtask.children, id);
+    if (nested) return nested;
+  }
+  return null;
+}
+function initSubtaskEditor() {
+  const tree = document.getElementById("taskSubtaskTree");
+  document.getElementById("addRootSubtask").addEventListener("click", () => {
+    tree.insertAdjacentHTML("beforeend", subtaskEditorItem());
+    tree.lastElementChild.querySelector(".subtask-editor-name").focus();
+  });
+  tree.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-subtask-action]");
+    if (!button) return;
+    const item = button.closest(".subtask-editor-item");
+    if (button.dataset.subtaskAction === "remove") {
+      item.remove();
+      return;
+    }
+    const children = item.querySelector(":scope > .subtask-editor-children");
+    children.insertAdjacentHTML("beforeend", subtaskEditorItem());
+    children.lastElementChild.querySelector(".subtask-editor-name").focus();
+  });
+}
+function renderSelectedTags() {
+  document.getElementById("selectedTaskTags").innerHTML = selectedTags
+    .map(
+      (tag, index) => `<span class="tag-chip selected-tag">
+${esc(tag)}<button type="button" aria-label="Remove ${esc(tag)} tag" data-remove-tag="${index}">×</button>
+</span>`,
+    )
+    .join("");
+}
+function renderTagOptions(show = true) {
+  const options = document.getElementById("tagOptions");
+  const query = document.getElementById("tagInput").value.trim();
+  const savedTags = [
+    ...new Map(
+      tasks
+        .flatMap((task) => (Array.isArray(task.tags) ? task.tags : []))
+        .map((tag) => [tag.toLowerCase(), tag]),
+    ).values(),
+  ];
+  const selected = new Set(selectedTags.map((tag) => tag.toLowerCase()));
+  const matches = savedTags.filter(
+    (tag) =>
+      !selected.has(tag.toLowerCase()) &&
+      tag.toLowerCase().includes(query.toLowerCase()),
+  );
+  const tagExists = [...savedTags, ...selectedTags].some(
+    (tag) => tag.toLowerCase() === query.toLowerCase(),
+  );
+  options.innerHTML = [
+    ...matches.map(
+      (tag) =>
+        `<button type="button" class="tag-option" data-tag-value="${esc(tag)}">${esc(tag)}</button>`,
+    ),
+    query && !tagExists
+      ? `<button type="button" class="tag-option create-tag-option" data-tag-value="${esc(query)}">＋ Create “${esc(query)}”</button>`
+      : "",
+    !matches.length && (!query || tagExists)
+      ? '<span class="tag-empty">Type to create a new tag.</span>'
+      : "",
+  ].join("");
+  options.hidden = !show;
+}
+function addSelectedTag(tag) {
+  const value = tag.trim();
+  if (
+    value &&
+    !selectedTags.some(
+      (selected) => selected.toLowerCase() === value.toLowerCase(),
+    )
+  ) {
+    selectedTags.push(value);
+  }
+  document.getElementById("tagInput").value = "";
+  renderSelectedTags();
+  renderTagOptions(true);
+  document.getElementById("tagInput").focus();
+}
+function setSelectedTags(tags = []) {
+  selectedTags = [...new Set(tags.filter(Boolean).map((tag) => tag.trim()))];
+  document.getElementById("tagInput").value = "";
+  renderSelectedTags();
+  renderTagOptions(false);
+}
+function initTagSelect() {
+  const input = document.getElementById("tagInput");
+  const options = document.getElementById("tagOptions");
+  const selected = document.getElementById("selectedTaskTags");
+  input.addEventListener("focus", () => renderTagOptions(true));
+  input.addEventListener("input", () => renderTagOptions(true));
+  input.addEventListener("keydown", (event) => {
+    const query = input.value.trim();
+    if (event.key === "Enter" && query) {
+      event.preventDefault();
+      const existing = tasks
+        .flatMap((task) => (Array.isArray(task.tags) ? task.tags : []))
+        .find((tag) => tag.toLowerCase() === query.toLowerCase());
+      addSelectedTag(existing || query);
+    } else if (event.key === "Backspace" && !query && selectedTags.length) {
+      selectedTags.pop();
+      renderSelectedTags();
+      renderTagOptions(true);
+    } else if (event.key === "Escape") {
+      options.hidden = true;
+    }
+  });
+  options.addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-tag-value]");
+    if (choice) addSelectedTag(choice.dataset.tagValue);
+  });
+  selected.addEventListener("click", (event) => {
+    const remove = event.target.closest("[data-remove-tag]");
+    if (!remove) return;
+    selectedTags.splice(Number(remove.dataset.removeTag), 1);
+    renderSelectedTags();
+    renderTagOptions(true);
+  });
+  document.addEventListener("click", (event) => {
+    if (!document.getElementById("tagSelect").contains(event.target)) {
+      options.hidden = true;
+    }
+  });
+  setSelectedTags();
+}
+function priorityLabel(priority) {
+  return (
+    { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" }[
+      priority
+    ] || "Normal"
+  );
 }
 function renderHome() {
   const open = tasks.filter((t) => !t.done);
@@ -240,11 +512,18 @@ function renderDeadlines() {
   if (cards.length) {
     carouselIndex = carouselIndex % cards.length;
     const t = cards[carouselIndex];
+    const priority = ["low", "normal", "high", "urgent"].includes(t.priority)
+      ? t.priority
+      : "normal";
     html += `<div class="deadline-stage">
-<article class="deadline-card" id="carouselCard">
+<article class="deadline-card priority-${priority}" id="carouselCard">
 <span class="badge blue">Deadline card ${carouselIndex + 1} / ${cards.length}</span>
+<span class="priority-badge">${priorityLabel(priority)}</span>
+${recurrenceLabel(t.recurrence) ? `<span class="recurrence-badge">↻ ${recurrenceLabel(t.recurrence)}</span>` : ""}
 <h2>${esc(t.name)}</h2>
 <p>${esc(t.memo || "No notes added.")}</p>
+${taskTagsMarkup(t)}
+${subtasksMarkup(t)}
 <div class="deadline-countdown">
 <span class="countdown-label">Time until deadline</span>
 <strong class="countdown-value" data-due="${esc(t.due || "")}">
@@ -288,6 +567,14 @@ function renderTaskSettings() {
 function toggleTask(id) {
   const t = tasks.find((x) => x.id === id);
   if (!t) return;
+  if (recurrenceLabel(t.recurrence) && !t.done) {
+    t.due = nextRecurringDue(t);
+    t.done = false;
+    persist();
+    refresh();
+    toast(`Next occurrence: ${dateFormat(t.due)}`);
+    return;
+  }
   t.done = !t.done;
   persist();
   refresh();
@@ -301,7 +588,22 @@ function editTask(id) {
   document.getElementById("taskName").value = t.name;
   document.getElementById("taskMemo").value = t.memo || "";
   document.getElementById("taskDue").value = t.due || "";
+  document.getElementById("taskRecurrence").value = recurrenceLabel(
+    t.recurrence,
+  )
+    ? t.recurrence
+    : "none";
   document.getElementById("taskMode").value = t.mode || "card";
+  setSelectedTags(Array.isArray(t.tags) ? t.tags : []);
+  document.getElementById("taskPriority").value = [
+    "low",
+    "normal",
+    "high",
+    "urgent",
+  ].includes(t.priority)
+    ? t.priority
+    : "normal";
+  renderSubtaskEditor(t.subtasks);
   document.getElementById("taskFormTitle").textContent = "Edit task";
   document.getElementById("cancelEdit").style.display = "inline-block";
   document.getElementById("taskName").focus();
@@ -312,6 +614,10 @@ function resetTaskForm() {
   document.getElementById("taskFormTitle").textContent = "New task";
   document.getElementById("cancelEdit").style.display = "none";
   document.getElementById("taskMode").value = "card";
+  document.getElementById("taskRecurrence").value = "none";
+  document.getElementById("taskPriority").value = "normal";
+  setSelectedTags();
+  renderSubtaskEditor();
 }
 function deleteTask(id) {
   const t = tasks.find((x) => x.id === id);
@@ -322,6 +628,14 @@ function deleteTask(id) {
   refresh();
   toast("Task deleted.");
 }
+function toggleSubtask(taskId, subtaskId) {
+  const task = tasks.find((item) => item.id === taskId);
+  const subtask = findSubtask(task?.subtasks, subtaskId);
+  if (!subtask) return;
+  subtask.done = !subtask.done;
+  persist();
+  refresh();
+}
 document.getElementById("taskForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const id = document.getElementById("taskId").value;
@@ -330,14 +644,40 @@ document.getElementById("taskForm").addEventListener("submit", (e) => {
     name: document.getElementById("taskName").value.trim(),
     memo: document.getElementById("taskMemo").value.trim(),
     due: document.getElementById("taskDue").value,
+    recurrence: document.getElementById("taskRecurrence").value,
     mode: document.getElementById("taskMode").value,
+    tags: [...selectedTags],
+    priority: document.getElementById("taskPriority").value,
+    subtasks: collectSubtaskEditors(document.getElementById("taskSubtaskTree")),
     done: false,
   };
   if (id) {
     const old = tasks.find((t) => t.id === id);
     data.done = old?.done || false;
+    const recurrenceAnchorChanged =
+      !old || old.recurrence !== data.recurrence || old.due !== data.due;
+    const anchorDate = data.due ? new Date(data.due) : new Date();
+    data.recurrenceDay = ["monthly", "yearly"].includes(data.recurrence)
+      ? recurrenceAnchorChanged
+        ? anchorDate.getDate()
+        : (old.recurrenceDay ?? anchorDate.getDate())
+      : null;
+    data.recurrenceMonth =
+      data.recurrence === "yearly"
+        ? recurrenceAnchorChanged
+          ? anchorDate.getMonth()
+          : (old.recurrenceMonth ?? anchorDate.getMonth())
+        : null;
     tasks = tasks.map((t) => (t.id === id ? data : t));
-  } else tasks.push(data);
+  } else {
+    const anchorDate = data.due ? new Date(data.due) : new Date();
+    data.recurrenceDay = ["monthly", "yearly"].includes(data.recurrence)
+      ? anchorDate.getDate()
+      : null;
+    data.recurrenceMonth =
+      data.recurrence === "yearly" ? anchorDate.getMonth() : null;
+    tasks.push(data);
+  }
   persist();
   resetTaskForm();
   refresh();
@@ -619,7 +959,14 @@ function refresh() {
   if (currentPage === "tasks") renderTaskSettings();
   if (currentPage === "timer") renderTimer();
 }
+tasks = tasks.map((task) => ({
+  ...task,
+  subtasks: normalizeSubtasks(task.subtasks),
+}));
+persist();
 function init() {
+  initTagSelect();
+  initSubtaskEditor();
   initNav();
   const now = new Date();
   document.getElementById("today").textContent = new Intl.DateTimeFormat(
